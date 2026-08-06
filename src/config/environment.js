@@ -8,8 +8,8 @@ export const ENVIRONMENTS = {
   staging: {
     id: 'staging',
     label: '☁️ Railway Staging',
-    apiUrl: 'https://opportunity-osapi-staging.up.railway.app',
-    wsUrl: 'wss://opportunity-osapi-staging.up.railway.app'
+    apiUrl: 'https://digitpop-server-staging.up.railway.app',
+    wsUrl: 'wss://digitpop-server-staging.up.railway.app'
   },
   production: {
     id: 'production',
