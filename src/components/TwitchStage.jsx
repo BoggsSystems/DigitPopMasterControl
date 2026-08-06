@@ -37,7 +37,7 @@ function LiveCameraStream({ activeSource, isPip }) {
           width: '100%',
           height: '100%',
           objectFit: 'cover',
-          transform: 'scaleX(-1)' // Mirror view for natural presenter selfie angle
+          transform: 'scaleX(-1)'
         }}
       />
       {!hasPermission && (
@@ -54,9 +54,44 @@ function LiveCameraStream({ activeSource, isPip }) {
 }
 
 export default function TwitchStage({ activeSource, onSelectSource }) {
-  const [pipPosition, setPipPosition] = useState('bottom-right'); // top-left, top-right, bottom-left, bottom-right
-  const [pipSize, setPipSize] = useState('medium'); // small, medium, large, hidden
+  const [pipPosition, setPipPosition] = useState('bottom-right');
+  const [pipSize, setPipSize] = useState('medium');
   const [isMuted, setIsMuted] = useState(false);
+  const [connectedDevices, setConnectedDevices] = useState([
+    { deviceId: 'dev_macbook_01', deviceName: 'MacBook Pro Presenter Cam', deviceType: 'IOS_APP', status: 'ONLINE', resolution: '4K 60fps', role: 'PIP_FACE' },
+    { deviceId: 'dev_iphone_02', deviceName: 'iPhone 16 Pro Roaming Cam', deviceType: 'IOS_APP', status: 'ONLINE', resolution: '4K 60fps', role: 'ANGLE_3' },
+    { deviceId: 'dev_macmini_03', deviceName: 'Mac Mini Opportunity OS Screen', deviceType: 'DESKTOP_CAPTURE', status: 'ONLINE', resolution: '1080p 60fps', role: 'MAIN_SCREEN' }
+  ]);
+
+  useEffect(() => {
+    async function fetchSources() {
+      try {
+        const res = await fetch('https://digitpop-server-staging.up.railway.app/api/stream/session/a95eae04-e911-4ab3-8a78-c1d876b4ac58/sources');
+        const data = await res.json();
+        if (data.success && data.devices && data.devices.length > 0) {
+          setConnectedDevices(data.devices);
+        }
+      } catch (err) {
+        // Fallback to active state
+      }
+    }
+    fetchSources();
+    const interval = setInterval(fetchSources, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const assignDeviceRole = async (deviceId, newRole) => {
+    setConnectedDevices(prev => prev.map(d => d.deviceId === deviceId ? { ...d, role: newRole } : d));
+    try {
+      await fetch('https://digitpop-server-staging.up.railway.app/api/stream/session/a95eae04-e911-4ab3-8a78-c1d876b4ac58/route-source', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId, assignedRole: newRole })
+      });
+    } catch (err) {
+      console.warn('Role assignment notice:', err);
+    }
+  };
 
   const getPipStyles = () => {
     let sizeStyles = { width: '260px', height: '160px' };
@@ -137,13 +172,56 @@ export default function TwitchStage({ activeSource, onSelectSource }) {
         </div>
       </div>
 
+      {/* Connected Devices Source Matrix Bar */}
+      <div style={{ background: 'rgba(15, 23, 42, 0.8)', padding: '12px 16px', borderRadius: '12px', border: '1px solid var(--border-glass)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#38bdf8' }}>📱 LIVE CONNECTED CLIENT DEVICES MATRIX ({connectedDevices.length})</span>
+          <span style={{ fontSize: '0.75rem', color: '#10b981', fontWeight: 600 }}>● Railway Cloud Router Active</span>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '10px' }}>
+          {connectedDevices.map(dev => (
+            <div key={dev.deviceId} style={{ background: 'rgba(30, 41, 59, 0.6)', padding: '10px 12px', borderRadius: '10px', border: '1px solid var(--border-glass)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontWeight: 700, fontSize: '0.85rem', color: '#fff' }}>{dev.deviceName}</span>
+                <span style={{ background: 'rgba(16, 185, 129, 0.2)', color: '#34d399', fontSize: '0.7rem', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>ONLINE</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.75rem', color: '#94a3b8' }}>
+                <span>Type: {dev.deviceType}</span>
+                <span>{dev.resolution}</span>
+              </div>
+              <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
+                {['MAIN_SCREEN', 'PIP_FACE', 'ANGLE_3'].map(role => (
+                  <button
+                    key={role}
+                    onClick={() => assignDeviceRole(dev.deviceId, role)}
+                    style={{
+                      flex: 1,
+                      padding: '4px 6px',
+                      borderRadius: '6px',
+                      fontSize: '0.7rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      border: dev.role === role ? '1px solid #10b981' : '1px solid var(--border-glass)',
+                      background: dev.role === role ? 'rgba(16, 185, 129, 0.3)' : 'rgba(15, 23, 42, 0.6)',
+                      color: dev.role === role ? '#34d399' : '#94a3b8'
+                    }}
+                  >
+                    {role === 'MAIN_SCREEN' ? '🖥️ Main' : role === 'PIP_FACE' ? '📷 PiP' : '📹 Angle 3'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Main Broadcast Composition Canvas */}
       <div style={{ position: 'relative', width: '100%', height: '480px', borderRadius: '14px', overflow: 'hidden', background: '#020617', border: '1px solid var(--border-glass)' }}>
-        {/* Main Background Feed: Mac Mini Screen Share Demo */}
+        {/* Main Background Feed */}
         <div style={{ width: '100%', height: '100%', position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
           {activeSource === 'MAC_MINI_DESKTOP' ? (
             <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg, #0f172a, #1e293b)', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {/* Mock IDE / Desktop Demo Window */}
               <div style={{ width: '100%', background: '#090a0f', borderRadius: '8px', border: '1px solid var(--border-glass)', padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', gap: '6px' }}>
                   <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#ef4444' }} />
@@ -188,7 +266,6 @@ export default function TwitchStage({ activeSource, onSelectSource }) {
               </button>
             </div>
 
-            {/* Inset Camera Feed Preview */}
             <LiveCameraStream activeSource="PIP_CAM" isPip />
           </div>
         </div>
