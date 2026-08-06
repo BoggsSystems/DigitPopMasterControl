@@ -1,4 +1,57 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+
+function LiveCameraStream({ activeSource, isPip }) {
+  const videoRef = useRef(null);
+  const [hasPermission, setHasPermission] = useState(true);
+
+  useEffect(() => {
+    let stream = null;
+    async function startCamera() {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+        setHasPermission(true);
+      } catch (err) {
+        console.warn('Camera access fallback (simulated feed):', err);
+        setHasPermission(false);
+      }
+    }
+    startCamera();
+    return () => {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [activeSource]);
+
+  return (
+    <div style={{ width: '100%', height: '100%', position: 'relative', background: '#020617', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          transform: 'scaleX(-1)' // Mirror view for natural presenter selfie angle
+        }}
+      />
+      {!hasPermission && (
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, #1e1b4b, #311b92)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+          <span style={{ fontSize: isPip ? '1.5rem' : '3rem' }}>🎥</span>
+          <span style={{ fontSize: isPip ? '0.7rem' : '1.1rem', fontWeight: 700, color: '#fff' }}>
+            {activeSource === 'IPHONE_ROAMING' ? 'iPhone Roaming Camera' : 'MacBook Presenter Camera'}
+          </span>
+          <span style={{ fontSize: '0.75rem', color: '#c084fc' }}>Live 1080p 60fps Stream Active</span>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function TwitchStage({ activeSource, onSelectSource }) {
   const [pipPosition, setPipPosition] = useState('bottom-right'); // top-left, top-right, bottom-left, bottom-right
@@ -114,12 +167,8 @@ export default function TwitchStage({ activeSource, onSelectSource }) {
                 <div style={{ color: '#a855f7' }}>⚡ [WEBSOCKET] LIVE_OVERLAY_TRIGGER dispatched to 1,420 viewers</div>
               </div>
             </div>
-          ) : activeSource === 'MACBOOK_FACETIME' ? (
-            <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg, #1e1b4b, #311b92)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
-              <div style={{ fontSize: '3rem' }}>🎥</div>
-              <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#fff' }}>MacBook FaceTime HD Camera Feed</h3>
-              <p style={{ color: '#c084fc', fontSize: '0.85rem' }}>Primary Presenter Face Stream (1080p 60fps)</p>
-            </div>
+          ) : activeSource === 'MACBOOK_FACETIME' || activeSource === 'IPHONE_ROAMING' ? (
+            <LiveCameraStream activeSource={activeSource} />
           ) : (
             <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg, #064e3b, #047857)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
               <div style={{ fontSize: '3rem' }}>📱</div>
@@ -133,17 +182,14 @@ export default function TwitchStage({ activeSource, onSelectSource }) {
         <div style={getPipStyles()}>
           <div style={{ width: '100%', height: '100%', position: 'relative', background: '#020617', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
             <div style={{ width: '100%', padding: '4px 8px', background: 'rgba(0,0,0,0.7)', position: 'absolute', top: 0, left: 0, right: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 2 }}>
-              <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#a855f7' }}>PIP: MacBook Cam</span>
+              <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#a855f7' }}>PIP: Live Broadcaster Cam</span>
               <button onClick={() => setIsMuted(!isMuted)} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: '0.7rem' }}>
                 {isMuted ? '🔇' : '🎙️'}
               </button>
             </div>
 
             {/* Inset Camera Feed Preview */}
-            <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg, #1e1b4b, #4338ca)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', paddingTop: '16px' }}>
-              <span style={{ fontSize: '1.8rem' }}>🧔🏻‍♂️</span>
-              <span style={{ fontSize: '0.7rem', color: '#e0e7ff', marginTop: '4px', fontWeight: 600 }}>Jeff Presenter</span>
-            </div>
+            <LiveCameraStream activeSource="PIP_CAM" isPip />
           </div>
         </div>
       </div>

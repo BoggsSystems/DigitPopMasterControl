@@ -7,7 +7,7 @@ import TelemetryLog from './components/TelemetryLog';
 export default function App() {
   const [isStreaming, setIsStreaming] = useState(true);
   const [isConnected, setIsConnected] = useState(true);
-  const [serverUrl, setServerUrl] = useState('http://10.0.0.242:9000');
+  const [serverUrl, setServerUrl] = useState('https://opportunity-osapi-staging.up.railway.app');
   const [durationSeconds, setDurationSeconds] = useState(142);
   const [viewerCount, setViewerCount] = useState(1420);
   const [credits, setCredits] = useState(14200);
