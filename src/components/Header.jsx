@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function Header({ isStreaming, isConnected, serverUrl, viewerCount, credits, durationSeconds, onToggleStream }) {
+export default function Header({ isStreaming, isConnected, serverUrl, currentEnv, onEnvChange, viewerCount, credits, durationSeconds, onToggleStream }) {
   const formatTime = (secs) => {
     const m = Math.floor(secs / 60).toString().padStart(2, '0');
     const s = (secs % 60).toString().padStart(2, '0');
@@ -23,11 +23,30 @@ export default function Header({ isStreaming, isConnected, serverUrl, viewerCoun
         </div>
       </div>
 
-      {/* Center: Server Connection Status */}
+      {/* Center: Server Connection & Environment Selector */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'rgba(15, 23, 42, 0.6)', padding: '6px 14px', borderRadius: '10px', border: '1px solid var(--border-glass)', fontSize: '0.85rem' }}>
         <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: isConnected ? '#10b981' : '#f59e0b' }} className={isConnected ? 'pulse-emerald' : ''} />
-        <span style={{ color: 'var(--text-muted)' }}>Server:</span>
-        <span style={{ fontFamily: 'var(--font-mono)', color: '#38bdf8', fontWeight: 600 }}>{serverUrl}</span>
+        
+        <select
+          value={currentEnv}
+          onChange={(e) => onEnvChange(e.target.value)}
+          style={{
+            background: 'rgba(30, 41, 59, 0.8)',
+            border: '1px solid #38bdf8',
+            color: '#38bdf8',
+            borderRadius: '6px',
+            padding: '2px 8px',
+            fontWeight: 600,
+            fontSize: '0.8rem',
+            cursor: 'pointer'
+          }}
+        >
+          <option value="development">🛠️ Dev (Local Mac Mini)</option>
+          <option value="staging">☁️ Staging (Railway Cloud)</option>
+          <option value="production">🚀 Production</option>
+        </select>
+        
+        <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', fontSize: '0.75rem' }}>{serverUrl}</span>
       </div>
 
       {/* Right: Metrics & Broadcast Toggle */}

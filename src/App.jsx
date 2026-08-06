@@ -3,11 +3,13 @@ import Header from './components/Header';
 import TwitchStage from './components/TwitchStage';
 import ShoppableTriggerDeck from './components/ShoppableTriggerDeck';
 import TelemetryLog from './components/TelemetryLog';
+import { ENVIRONMENTS } from './config/environment';
 
 export default function App() {
   const [isStreaming, setIsStreaming] = useState(true);
   const [isConnected, setIsConnected] = useState(true);
-  const [serverUrl, setServerUrl] = useState('https://opportunity-osapi-staging.up.railway.app');
+  const [currentEnv, setCurrentEnv] = useState('staging');
+  const [serverUrl, setServerUrl] = useState(ENVIRONMENTS.staging.apiUrl);
   const [durationSeconds, setDurationSeconds] = useState(142);
   const [viewerCount, setViewerCount] = useState(1420);
   const [credits, setCredits] = useState(14200);
@@ -104,12 +106,28 @@ export default function App() {
     setEvents((prev) => [newLog, ...prev]);
   };
 
+  const handleEnvChange = (envKey) => {
+    const targetEnv = ENVIRONMENTS[envKey] || ENVIRONMENTS.staging;
+    setCurrentEnv(envKey);
+    setServerUrl(targetEnv.apiUrl);
+    const newLog = {
+      time: new Date().toLocaleTimeString(),
+      type: 'ENVIRONMENT_SWITCH',
+      message: `Switched environment to: ${targetEnv.label} (${targetEnv.apiUrl})`,
+      source: 'MASTER_CONTROL_CONFIG',
+      latencyMs: 1
+    };
+    setEvents((prev) => [newLog, ...prev]);
+  };
+
   return (
     <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '24px 16px' }}>
       <Header
         isStreaming={isStreaming}
         isConnected={isConnected}
         serverUrl={serverUrl}
+        currentEnv={currentEnv}
+        onEnvChange={handleEnvChange}
         viewerCount={viewerCount}
         credits={credits}
         durationSeconds={durationSeconds}
