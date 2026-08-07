@@ -135,6 +135,8 @@ export default function TwitchStage({ activeSource, onSelectSource }) {
   const [pipPosition, setPipPosition] = useState('bottom-right');
   const [pipSize, setPipSize] = useState('medium');
   const [isMuted, setIsMuted] = useState(false);
+  const [isPairModalOpen, setIsPairModalOpen] = useState(false);
+
   const defaultDevices = [
     { deviceId: 'dev_macbook_01', deviceName: 'MacBook Pro Presenter Cam', deviceType: 'IOS_APP', status: 'STANDBY', resolution: '4K 60fps', role: 'PIP_FACE' },
     { deviceId: 'dev_iphone_02', deviceName: 'iPhone 16 Pro Roaming Cam', deviceType: 'IOS_APP', status: 'STANDBY', resolution: '4K 60fps', role: 'ANGLE_3' },
@@ -152,14 +154,31 @@ export default function TwitchStage({ activeSource, onSelectSource }) {
         const onlineDeviceIds = new Set(serverDevices.map(d => d.deviceId));
         const hasMacBookServer = serverDevices.some(sd => sd.deviceName && sd.deviceName.toLowerCase().includes('macbook'));
 
-        setConnectedDevices(defaultDevices.map(d => {
-          const isMacBook = d.deviceId === 'dev_macbook_01';
-          const isOnline = onlineDeviceIds.has(d.deviceId) || (isMacBook && hasMacBookServer);
-          return {
-            ...d,
-            status: isOnline ? 'ONLINE' : 'STANDBY'
-          };
-        }));
+        setConnectedDevices(prevDevices => {
+          // Merge custom attached devices with default devices
+          const combined = [...prevDevices];
+          serverDevices.forEach(sd => {
+            if (!combined.some(cd => cd.deviceId === sd.deviceId)) {
+              combined.push({
+                deviceId: sd.deviceId,
+                deviceName: sd.deviceName || 'Client Device',
+                deviceType: sd.deviceType || 'IOS_APP',
+                status: 'ONLINE',
+                resolution: sd.resolution || '4K 60fps',
+                role: 'PIP_FACE'
+              });
+            }
+          });
+
+          return combined.map(d => {
+            const isMacBook = d.deviceId === 'dev_macbook_01';
+            const isOnline = onlineDeviceIds.has(d.deviceId) || (isMacBook && hasMacBookServer);
+            return {
+              ...d,
+              status: isOnline ? 'ONLINE' : d.status === 'ONLINE' && onlineDeviceIds.has(d.deviceId) ? 'ONLINE' : 'STANDBY'
+            };
+          });
+        });
       } catch (err) {
         // Fallback
       }
@@ -172,13 +191,52 @@ export default function TwitchStage({ activeSource, onSelectSource }) {
   const assignDeviceRole = async (deviceId, newRole) => {
     setConnectedDevices(prev => prev.map(d => d.deviceId === deviceId ? { ...d, role: newRole } : d));
     try {
-      await fetch('https://digitpop-server-staging.up.railway.app/api/stream/session/a95eae04-e911-4ab3-8a78-c1d876b4ac58/route-source', {
+      await fetch('https://digitpop-server-staging.up.railway.app/api/stream/session/45f65b49-79ef-48c6-a2e3-9c9655a4f569/route-source', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ deviceId, assignedRole: newRole })
       });
     } catch (err) {
       console.warn('Role assignment notice:', err);
+    }
+  };
+
+  const handleAttachDevicePreset = async (name, type, resText) => {
+    const newId = `dev_${Date.now().toString().slice(-6)}`;
+    const newDevice = {
+      deviceId: newId,
+      deviceName: name,
+      deviceType: type,
+      status: 'ONLINE',
+      resolution: resText,
+      role: 'ANGLE_3'
+    };
+
+    setConnectedDevices(prev => [...prev, newDevice]);
+    setIsPairModalOpen(false);
+
+    try {
+      await fetch('https://digitpop-server-staging.up.railway.app/api/stream/session/45f65b49-79ef-48c6-a2e3-9c9655a4f569/attach-device', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newDevice)
+      });
+    } catch (err) {
+      console.warn('Attach device notice:', err);
+    }
+  };
+
+  const handleDetachDevice = async (deviceId) => {
+    setConnectedDevices(prev => prev.filter(d => d.deviceId !== deviceId));
+
+    try {
+      await fetch('https://digitpop-server-staging.up.railway.app/api/stream/session/45f65b49-79ef-48c6-a2e3-9c9655a4f569/detach-device', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId })
+      });
+    } catch (err) {
+      console.warn('Detach device notice:', err);
     }
   };
 
@@ -262,33 +320,70 @@ export default function TwitchStage({ activeSource, onSelectSource }) {
       </div>
 
       {/* Connected Devices Source Matrix Bar */}
-      <div style={{ background: 'rgba(15, 23, 42, 0.8)', padding: '12px 16px', borderRadius: '12px', border: '1px solid var(--border-glass)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      <div style={{ background: 'rgba(15, 23, 42, 0.8)', padding: '14px 16px', borderRadius: '12px', border: '1px solid var(--border-glass)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#38bdf8' }}>📱 LIVE CONNECTED CLIENT DEVICES MATRIX ({connectedDevices.length})</span>
-          <span style={{ fontSize: '0.75rem', color: '#10b981', fontWeight: 600 }}>● Railway Cloud Router Active</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#38bdf8' }}>📱 LIVE CONNECTED CLIENT DEVICES MATRIX ({connectedDevices.length})</span>
+            <span style={{ fontSize: '0.75rem', color: '#10b981', fontWeight: 600 }}>● Railway Cloud Router Active</span>
+          </div>
+
+          <button
+            onClick={() => setIsPairModalOpen(true)}
+            style={{
+              background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
+              border: 'none',
+              color: '#fff',
+              padding: '6px 12px',
+              borderRadius: '8px',
+              fontWeight: 700,
+              fontSize: '0.75rem',
+              cursor: 'pointer',
+              boxShadow: '0 2px 10px rgba(59, 130, 246, 0.3)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}
+          >
+            ➕ Pair / Attach Device
+          </button>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '10px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(290px, 1fr))', gap: '10px' }}>
           {connectedDevices.map(dev => (
-            <div key={dev.deviceId} style={{ background: 'rgba(30, 41, 59, 0.6)', padding: '10px 12px', borderRadius: '10px', border: '1px solid var(--border-glass)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <div key={dev.deviceId} style={{ background: 'rgba(30, 41, 59, 0.6)', padding: '12px', borderRadius: '10px', border: dev.status === 'ONLINE' ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid var(--border-glass)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontWeight: 700, fontSize: '0.85rem', color: '#fff' }}>{dev.deviceName}</span>
-                <span style={{
-                  background: dev.status === 'ONLINE' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(148, 163, 184, 0.15)',
-                  color: dev.status === 'ONLINE' ? '#34d399' : '#94a3b8',
-                  fontSize: '0.7rem',
-                  padding: '2px 6px',
-                  borderRadius: '4px',
-                  fontWeight: 600
-                }}>
-                  {dev.status || 'STANDBY'}
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontWeight: 700, fontSize: '0.85rem', color: '#fff' }}>{dev.deviceName}</span>
+                  {dev.status === 'ONLINE' && <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 6px #10b981' }} />}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{
+                    background: dev.status === 'ONLINE' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(148, 163, 184, 0.15)',
+                    color: dev.status === 'ONLINE' ? '#34d399' : '#94a3b8',
+                    fontSize: '0.7rem',
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    fontWeight: 600
+                  }}>
+                    {dev.status || 'STANDBY'}
+                  </span>
+
+                  <button
+                    onClick={() => handleDetachDevice(dev.deviceId)}
+                    title="Disconnect / Remove Device"
+                    style={{ background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#f87171', borderRadius: '4px', padding: '2px 6px', cursor: 'pointer', fontSize: '0.65rem' }}
+                  >
+                    🔌 Remove
+                  </button>
+                </div>
               </div>
+
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.75rem', color: '#94a3b8' }}>
                 <span>Type: {dev.deviceType}</span>
                 <span>{dev.resolution}</span>
               </div>
-              <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
+
+              <div style={{ display: 'flex', gap: '6px', marginTop: '2px' }}>
                 {['MAIN_SCREEN', 'PIP_FACE', 'ANGLE_3'].map(role => (
                   <button
                     key={role}
@@ -409,6 +504,48 @@ export default function TwitchStage({ activeSource, onSelectSource }) {
           </button>
         </div>
       </div>
+
+      {/* Pair / Attach Device Modal */}
+      {isPairModalOpen && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0, 0, 0, 0.75)', backdropFilter: 'blur(8px)', zIndex: 99, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div style={{ background: '#0f172a', border: '1px solid rgba(168, 85, 247, 0.4)', borderRadius: '16px', padding: '24px', maxWidth: '460px', width: '100%', display: 'flex', flexDirection: 'column', gap: '16px', boxShadow: '0 20px 50px rgba(0,0,0,0.8)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#fff' }}>📱 Pair New Client Broadcaster Device</h3>
+              <button onClick={() => setIsPairModalOpen(false)} style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
+            </div>
+
+            <p style={{ color: '#cbd5e1', fontSize: '0.85rem', lineHeight: 1.5 }}>
+              Scan the session pairing QR code or tap a quick preset below to attach a new broadcasting client to the live Railway Cloud router:
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <button
+                onClick={() => handleAttachDevicePreset('iPhone 16 Pro Roaming Cam', 'IOS_APP', '4K 60fps')}
+                style={{ background: 'rgba(30, 41, 59, 0.8)', border: '1px solid #10b981', color: '#fff', padding: '12px', borderRadius: '10px', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer', textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+              >
+                <span>📱 Attach iPhone 16 Pro (4K 60fps)</span>
+                <span style={{ color: '#34d399', fontSize: '0.75rem' }}>+ Attach</span>
+              </button>
+
+              <button
+                onClick={() => handleAttachDevicePreset('iPad Pro Studio Cam', 'IOS_APP', '1080p 60fps')}
+                style={{ background: 'rgba(30, 41, 59, 0.8)', border: '1px solid #a855f7', color: '#fff', padding: '12px', borderRadius: '10px', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer', textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+              >
+                <span>📱 Attach iPad Pro Studio (1080p)</span>
+                <span style={{ color: '#c084fc', fontSize: '0.75rem' }}>+ Attach</span>
+              </button>
+
+              <button
+                onClick={() => handleAttachDevicePreset('Sony Alpha A7IV Studio Rig', 'HDMI_CAPTURE', '4K 60fps')}
+                style={{ background: 'rgba(30, 41, 59, 0.8)', border: '1px solid #38bdf8', color: '#fff', padding: '12px', borderRadius: '10px', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer', textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+              >
+                <span>📷 Attach Sony Alpha A7IV Rig (4K)</span>
+                <span style={{ color: '#38bdf8', fontSize: '0.75rem' }}>+ Attach</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
