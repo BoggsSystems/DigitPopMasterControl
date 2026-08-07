@@ -1,29 +1,107 @@
 import React, { useState, useEffect, useRef } from 'react';
+import Hls from 'hls.js';
 
 function LiveCameraStream({ activeSource, isPip }) {
+  const videoRef = useRef(null);
+  const [remoteFrameUrl, setRemoteFrameUrl] = useState(null);
+  const [isHlsPlaying, setIsHlsPlaying] = useState(false);
+
+  useEffect(() => {
+    const streamUrl = 'https://digitpop-server-staging.up.railway.app/live/jeff_speedrun.m3u8';
+    let hls = null;
+
+    if (videoRef.current) {
+      if (Hls.isSupported()) {
+        hls = new Hls({
+          enableWorker: true,
+          lowLatencyMode: true,
+          backBufferLength: 90
+        });
+        hls.loadSource(streamUrl);
+        hls.attachMedia(videoRef.current);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          videoRef.current.play().then(() => setIsHlsPlaying(true)).catch(() => {});
+        });
+        hls.on(Hls.Events.ERROR, (evt, data) => {
+          if (data.fatal) setIsHlsPlaying(false);
+        });
+      } else if (videoRef.current.canPlayType('application/vnd.apple.mpegurl')) {
+        videoRef.current.src = streamUrl;
+        videoRef.current.play().then(() => setIsHlsPlaying(true)).catch(() => {});
+      }
+    }
+
+    let ws = null;
+    try {
+      ws = new WebSocket('wss://digitpop-server-staging.up.railway.app/master_control?sessionId=45f65b49-79ef-48c6-a2e3-9c9655a4f569');
+      ws.onmessage = (evt) => {
+        try {
+          const msg = JSON.parse(evt.data);
+          if (msg.type === 'REMOTE_VIDEO_FRAME' && msg.frameData && msg.frameData.startsWith('data:image/jpeg;base64,')) {
+            setRemoteFrameUrl(msg.frameData);
+          }
+        } catch (e) {
+          // skip
+        }
+      };
+    } catch (e) {
+      console.warn('WebSocket frame listener notice:', e);
+    }
+
+    return () => {
+      if (hls) hls.destroy();
+      if (ws) ws.close();
+    };
+  }, [activeSource]);
+
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative', background: '#020617', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }}>
-      {/* High-Tech Animated Cloud Stream Video Monitor */}
-      <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(circle at 50% 50%, rgba(168, 85, 247, 0.25), rgba(2, 6, 23, 0.95))', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(16, 185, 129, 0.2)', border: '1px solid rgba(16, 185, 129, 0.5)', padding: '4px 12px', borderRadius: '20px' }}>
-          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 10px #10b981' }} />
-          <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#34d399', letterSpacing: '0.5px' }}>LIVE CLOUD STREAM INGEST ACTIVE</span>
-        </div>
+      {/* HTML5 HLS Live Video Player */}
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          display: isHlsPlaying ? 'block' : 'none'
+        }}
+      />
 
-        <span style={{ fontSize: isPip ? '1.8rem' : '3.5rem' }}>📹</span>
+      {/* WebSocket Frame Relay Fallback */}
+      {!isHlsPlaying && remoteFrameUrl && (
+        <img
+          src={remoteFrameUrl}
+          alt="Live Stream Feed"
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+        />
+      )}
 
-        <span style={{ fontSize: isPip ? '0.75rem' : '1.1rem', fontWeight: 800, color: '#fff', textAlign: 'center', textShadow: '0 2px 10px rgba(0,0,0,0.8)' }}>
-          {activeSource === 'IPHONE_ROAMING' ? 'iPhone 16 Pro Roaming Cam (4K 60fps)' : 'MacBook Pro Presenter Cam (1080p 60fps)'}
-        </span>
-
-        {!isPip && (
-          <div style={{ display: 'flex', gap: '16px', fontSize: '0.75rem', color: '#c084fc', background: 'rgba(15, 23, 42, 0.8)', padding: '6px 14px', borderRadius: '8px', border: '1px solid var(--border-glass)' }}>
-            <span>⚡ Bitrate: 4.2 Mbps</span>
-            <span>📡 Latency: 6ms</span>
-            <span>☁️ Railway Cloud Dedicated Router</span>
+      {/* Cloud Monitor Ingest Standby HUD */}
+      {!isHlsPlaying && !remoteFrameUrl && (
+        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(circle at 50% 50%, rgba(168, 85, 247, 0.25), rgba(2, 6, 23, 0.95))', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(16, 185, 129, 0.2)', border: '1px solid rgba(16, 185, 129, 0.5)', padding: '4px 12px', borderRadius: '20px' }}>
+            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 10px #10b981' }} />
+            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#34d399', letterSpacing: '0.5px' }}>LIVE CLOUD STREAM INGEST ACTIVE</span>
           </div>
-        )}
-      </div>
+
+          <span style={{ fontSize: isPip ? '1.8rem' : '3.5rem' }}>📹</span>
+
+          <span style={{ fontSize: isPip ? '0.75rem' : '1.1rem', fontWeight: 800, color: '#fff', textAlign: 'center', textShadow: '0 2px 10px rgba(0,0,0,0.8)' }}>
+            {activeSource === 'IPHONE_ROAMING' ? 'iPhone 16 Pro Roaming Cam (4K 60fps)' : 'MacBook Pro Presenter Cam (1080p 60fps)'}
+          </span>
+
+          {!isPip && (
+            <div style={{ display: 'flex', gap: '16px', fontSize: '0.75rem', color: '#c084fc', background: 'rgba(15, 23, 42, 0.8)', padding: '6px 14px', borderRadius: '8px', border: '1px solid var(--border-glass)' }}>
+              <span>⚡ H.264/AAC Hardware Accelerated</span>
+              <span>📡 Low Latency HLS</span>
+              <span>☁️ Railway Cloud Router</span>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
