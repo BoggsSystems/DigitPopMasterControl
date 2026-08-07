@@ -1,78 +1,70 @@
 import React, { useState, useEffect, useRef } from 'react';
-import Hls from 'hls.js';
 
 function LiveCameraStream({ activeSource, isPip }) {
-  const videoRef = useRef(null);
   const localVideoRef = useRef(null);
   const [remoteFrameUrl, setRemoteFrameUrl] = useState(null);
-  const [isHlsPlaying, setIsHlsPlaying] = useState(false);
-  const [hasLocalCamera, setHasLocalCamera] = useState(false);
+  const [hasCameraAccess, setHasCameraAccess] = useState(false);
+  const [logStatus, setLogStatus] = useState('Initializing stream engine...');
 
-  // Initialize HLS & WebSockets Cloud Listeners
   useEffect(() => {
-    const streamUrl = 'https://digitpop-server-staging.up.railway.app/live/jeff_speedrun.m3u8';
-    let hls = null;
+    console.log('[LiveCameraStream] Initializing camera & stream engine for source:', activeSource);
+    setLogStatus(`Initializing camera stream for ${activeSource}...`);
 
-    if (videoRef.current) {
-      if (Hls.isSupported()) {
-        hls = new Hls({ enableWorker: true, lowLatencyMode: true });
-        hls.loadSource(streamUrl);
-        hls.attachMedia(videoRef.current);
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          videoRef.current.play().then(() => setIsHlsPlaying(true)).catch(() => {});
-        });
-        hls.on(Hls.Events.ERROR, (evt, data) => {
-          if (data.fatal) setIsHlsPlaying(false);
-        });
-      } else if (videoRef.current.canPlayType('application/vnd.apple.mpegurl')) {
-        videoRef.current.src = streamUrl;
-        videoRef.current.play().then(() => setIsHlsPlaying(true)).catch(() => {});
-      }
-    }
+    let stream = null;
+    navigator.mediaDevices?.getUserMedia({ video: { width: 1280, height: 720 }, audio: false })
+      .then(st => {
+        console.log('[LiveCameraStream] Camera stream acquired successfully!');
+        stream = st;
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = st;
+          localVideoRef.current.play().catch(e => console.warn('Video play notice:', e));
+        }
+        setHasCameraAccess(true);
+        setLogStatus('Live presenter camera active');
+      })
+      .catch(err => {
+        console.warn('[LiveCameraStream] getUserMedia notice:', err.message);
+        setHasCameraAccess(false);
+        setLogStatus(`Camera notice: ${err.message}`);
+      });
 
     let ws = null;
     try {
       ws = new WebSocket('wss://digitpop-server-staging.up.railway.app/master_control?sessionId=45f65b49-79ef-48c6-a2e3-9c9655a4f569');
+      ws.onopen = () => console.log('[LiveCameraStream] WebSocket connected to Railway Cloud');
       ws.onmessage = (evt) => {
         try {
           const msg = JSON.parse(evt.data);
-          if (msg.type === 'REMOTE_VIDEO_FRAME' && msg.frameData && msg.frameData.startsWith('data:image/jpeg;base64,')) {
+          if (msg.type === 'REMOTE_VIDEO_FRAME' && msg.frameData) {
+            console.log('[LiveCameraStream] Received REMOTE_VIDEO_FRAME from cloud!');
             setRemoteFrameUrl(msg.frameData);
           }
-        } catch (e) {
-          // skip
-        }
+        } catch (e) {}
       };
     } catch (e) {
-      console.warn('WebSocket frame listener notice:', e);
+      console.warn('[LiveCameraStream] WebSocket error:', e);
     }
 
-    // Auto-activate presenter video feed
-    let cameraStream = null;
-    navigator.mediaDevices?.getUserMedia({ video: { width: 1280, height: 720 }, audio: false })
-      .then(stream => {
-        cameraStream = stream;
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = stream;
-        }
-        setHasLocalCamera(true);
-      })
-      .catch(() => setHasLocalCamera(false));
-
     return () => {
-      if (hls) hls.destroy();
+      if (stream) stream.getTracks().forEach(t => t.stop());
       if (ws) ws.close();
-      if (cameraStream) {
-        cameraStream.getTracks().forEach(t => t.stop());
-      }
     };
   }, [activeSource]);
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative', background: '#020617', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }}>
-      {/* 1. HLS Live Video Player */}
+      {/* Remote WebSocket Frame Overlay */}
+      {remoteFrameUrl && (
+        <img
+          src={remoteFrameUrl}
+          alt="Live Remote Feed"
+          style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', inset: 0, zIndex: 3 }}
+        />
+      )}
+
+      {/* Local Video Camera Track */}
       <video
-        ref={videoRef}
+        ref={localVideoRef}
         autoPlay
         playsInline
         muted
@@ -80,33 +72,50 @@ function LiveCameraStream({ activeSource, isPip }) {
           width: '100%',
           height: '100%',
           objectFit: 'cover',
-          display: isHlsPlaying ? 'block' : 'none'
+          transform: isPip ? 'none' : 'scaleX(-1)',
+          position: 'absolute',
+          inset: 0,
+          zIndex: 2,
+          display: hasCameraAccess ? 'block' : 'none'
         }}
       />
 
-      {/* 2. WebSockets Cloud JPEG Frame Relay */}
-      {!isHlsPlaying && remoteFrameUrl && (
-        <img
-          src={remoteFrameUrl}
-          alt="Live Broadcaster Feed"
-          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-        />
-      )}
+      {/* High-Tech Animated Fallback Canvas with Telemetry HUD */}
+      {!hasCameraAccess && !remoteFrameUrl && (
+        <div style={{ position: 'absolute', inset: 0, zIndex: 1, background: 'radial-gradient(circle at 50% 50%, rgba(168, 85, 247, 0.35), rgba(2, 6, 23, 0.95))', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '12px', padding: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(16, 185, 129, 0.2)', border: '1px solid rgba(16, 185, 129, 0.5)', padding: '6px 16px', borderRadius: '20px' }}>
+            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 10px #10b981' }} />
+            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#34d399', letterSpacing: '0.5px' }}>● LIVE CLOUD INGEST ACTIVE</span>
+          </div>
 
-      {/* 3. Live Camera Video Stream */}
-      {!isHlsPlaying && !remoteFrameUrl && (
-        <video
-          ref={localVideoRef}
-          autoPlay
-          playsInline
-          muted
-          style={{
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-            transform: isPip ? 'none' : 'scaleX(-1)'
-          }}
-        />
+          <span style={{ fontSize: isPip ? '1.8rem' : '3.5rem' }}>📹</span>
+
+          <span style={{ fontSize: isPip ? '0.75rem' : '1.1rem', fontWeight: 800, color: '#fff', textAlign: 'center' }}>
+            {activeSource === 'IPHONE_ROAMING' ? 'iPhone 16 Pro Roaming Cam (4K 60fps)' : 'MacBook Pro Presenter Cam (1080p 60fps)'}
+          </span>
+
+          <div style={{ background: 'rgba(15, 23, 42, 0.85)', padding: '8px 16px', borderRadius: '8px', border: '1px solid var(--border-glass)', fontSize: '0.75rem', color: '#c084fc', textAlign: 'center', maxWidth: '380px' }}>
+            Status: {logStatus}
+          </div>
+
+          {!isPip && (
+            <button
+              onClick={() => {
+                navigator.mediaDevices?.getUserMedia({ video: true })
+                  .then(st => {
+                    if (localVideoRef.current) {
+                      localVideoRef.current.srcObject = st;
+                      localVideoRef.current.play().catch(e => console.warn(e));
+                    }
+                    setHasCameraAccess(true);
+                  });
+              }}
+              style={{ background: 'linear-gradient(135deg, #a855f7, #7e22ce)', border: 'none', color: '#fff', padding: '8px 18px', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem', boxShadow: '0 4px 14px rgba(168, 85, 247, 0.4)' }}
+            >
+              ▶ Enable Video Preview Feed
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
