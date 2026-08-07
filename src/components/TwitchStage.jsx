@@ -482,7 +482,7 @@ export default function TwitchStage({ activeSource, onSelectSource }) {
           ) : (
             <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg, #064e3b, #047857)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
               <div style={{ fontSize: '3rem' }}>📱</div>
-              <h3 style={{ fontSize: '1.2rem', fontWeight 700, color: '#fff' }}>iPhone Wireless Roaming Camera</h3>
+              <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#fff' }}>iPhone Wireless Roaming Camera</h3>
               <p style={{ color: '#6ee7b7', fontSize: '0.85rem' }}>Secondary Mobile Close-Up Angle (4K 60fps)</p>
             </div>
           )}
