@@ -3,20 +3,19 @@ import Hls from 'hls.js';
 
 function LiveCameraStream({ activeSource, isPip }) {
   const videoRef = useRef(null);
+  const localVideoRef = useRef(null);
   const [remoteFrameUrl, setRemoteFrameUrl] = useState(null);
   const [isHlsPlaying, setIsHlsPlaying] = useState(false);
+  const [hasLocalCamera, setHasLocalCamera] = useState(false);
 
+  // Initialize HLS & WebSockets Cloud Listeners
   useEffect(() => {
     const streamUrl = 'https://digitpop-server-staging.up.railway.app/live/jeff_speedrun.m3u8';
     let hls = null;
 
     if (videoRef.current) {
       if (Hls.isSupported()) {
-        hls = new Hls({
-          enableWorker: true,
-          lowLatencyMode: true,
-          backBufferLength: 90
-        });
+        hls = new Hls({ enableWorker: true, lowLatencyMode: true });
         hls.loadSource(streamUrl);
         hls.attachMedia(videoRef.current);
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
@@ -48,15 +47,30 @@ function LiveCameraStream({ activeSource, isPip }) {
       console.warn('WebSocket frame listener notice:', e);
     }
 
+    // Auto-activate presenter video feed
+    let cameraStream = null;
+    navigator.mediaDevices?.getUserMedia({ video: { width: 1280, height: 720 }, audio: false })
+      .then(stream => {
+        cameraStream = stream;
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = stream;
+        }
+        setHasLocalCamera(true);
+      })
+      .catch(() => setHasLocalCamera(false));
+
     return () => {
       if (hls) hls.destroy();
       if (ws) ws.close();
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(t => t.stop());
+      }
     };
   }, [activeSource]);
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative', background: '#020617', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }}>
-      {/* HTML5 HLS Live Video Player */}
+      {/* 1. HLS Live Video Player */}
       <video
         ref={videoRef}
         autoPlay
@@ -70,37 +84,29 @@ function LiveCameraStream({ activeSource, isPip }) {
         }}
       />
 
-      {/* WebSocket Frame Relay Fallback */}
+      {/* 2. WebSockets Cloud JPEG Frame Relay */}
       {!isHlsPlaying && remoteFrameUrl && (
         <img
           src={remoteFrameUrl}
-          alt="Live Stream Feed"
+          alt="Live Broadcaster Feed"
           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
         />
       )}
 
-      {/* Cloud Monitor Ingest Standby HUD */}
+      {/* 3. Live Camera Video Stream */}
       {!isHlsPlaying && !remoteFrameUrl && (
-        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(circle at 50% 50%, rgba(168, 85, 247, 0.25), rgba(2, 6, 23, 0.95))', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(16, 185, 129, 0.2)', border: '1px solid rgba(16, 185, 129, 0.5)', padding: '4px 12px', borderRadius: '20px' }}>
-            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 10px #10b981' }} />
-            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#34d399', letterSpacing: '0.5px' }}>LIVE CLOUD STREAM INGEST ACTIVE</span>
-          </div>
-
-          <span style={{ fontSize: isPip ? '1.8rem' : '3.5rem' }}>📹</span>
-
-          <span style={{ fontSize: isPip ? '0.75rem' : '1.1rem', fontWeight: 800, color: '#fff', textAlign: 'center', textShadow: '0 2px 10px rgba(0,0,0,0.8)' }}>
-            {activeSource === 'IPHONE_ROAMING' ? 'iPhone 16 Pro Roaming Cam (4K 60fps)' : 'MacBook Pro Presenter Cam (1080p 60fps)'}
-          </span>
-
-          {!isPip && (
-            <div style={{ display: 'flex', gap: '16px', fontSize: '0.75rem', color: '#c084fc', background: 'rgba(15, 23, 42, 0.8)', padding: '6px 14px', borderRadius: '8px', border: '1px solid var(--border-glass)' }}>
-              <span>⚡ H.264/AAC Hardware Accelerated</span>
-              <span>📡 Low Latency HLS</span>
-              <span>☁️ Railway Cloud Router</span>
-            </div>
-          )}
-        </div>
+        <video
+          ref={localVideoRef}
+          autoPlay
+          playsInline
+          muted
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            transform: isPip ? 'none' : 'scaleX(-1)'
+          }}
+        />
       )}
     </div>
   );
