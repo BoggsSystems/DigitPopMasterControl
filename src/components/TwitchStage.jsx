@@ -137,8 +137,8 @@ export default function TwitchStage({ activeSource, onSelectSource }) {
   const [isMuted, setIsMuted] = useState(false);
   const [connectedDevices, setConnectedDevices] = useState([
     { deviceId: 'dev_macbook_01', deviceName: 'MacBook Pro Presenter Cam', deviceType: 'IOS_APP', status: 'ONLINE', resolution: '4K 60fps', role: 'PIP_FACE' },
-    { deviceId: 'dev_iphone_02', deviceName: 'iPhone 16 Pro Roaming Cam', deviceType: 'IOS_APP', status: 'ONLINE', resolution: '4K 60fps', role: 'ANGLE_3' },
-    { deviceId: 'dev_macmini_03', deviceName: 'Mac Mini Opportunity OS Screen', deviceType: 'DESKTOP_CAPTURE', status: 'ONLINE', resolution: '1080p 60fps', role: 'MAIN_SCREEN' }
+    { deviceId: 'dev_iphone_02', deviceName: 'iPhone 16 Pro Roaming Cam', deviceType: 'IOS_APP', status: 'STANDBY', resolution: '4K 60fps', role: 'ANGLE_3' },
+    { deviceId: 'dev_macmini_03', deviceName: 'Mac Mini Opportunity OS Screen', deviceType: 'DESKTOP_CAPTURE', status: 'STANDBY', resolution: '1080p 60fps', role: 'MAIN_SCREEN' }
   ]);
 
   useEffect(() => {
@@ -147,10 +147,14 @@ export default function TwitchStage({ activeSource, onSelectSource }) {
         const res = await fetch('https://digitpop-server-staging.up.railway.app/api/stream/sources');
         const data = await res.json();
         if (data.success && data.devices && data.devices.length > 0) {
-          setConnectedDevices(data.devices);
+          const onlineIds = new Set(data.devices.map(d => d.deviceId));
+          setConnectedDevices(prev => prev.map(d => ({
+            ...d,
+            status: onlineIds.has(d.deviceId) || d.deviceName.includes('MacBook') ? 'ONLINE' : 'STANDBY'
+          })));
         }
       } catch (err) {
-        // Fallback to active state
+        // Fallback
       }
     }
     fetchSources();
@@ -262,7 +266,16 @@ export default function TwitchStage({ activeSource, onSelectSource }) {
             <div key={dev.deviceId} style={{ background: 'rgba(30, 41, 59, 0.6)', padding: '10px 12px', borderRadius: '10px', border: '1px solid var(--border-glass)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span style={{ fontWeight: 700, fontSize: '0.85rem', color: '#fff' }}>{dev.deviceName}</span>
-                <span style={{ background: 'rgba(16, 185, 129, 0.2)', color: '#34d399', fontSize: '0.7rem', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>ONLINE</span>
+                <span style={{
+                  background: dev.status === 'ONLINE' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(148, 163, 184, 0.15)',
+                  color: dev.status === 'ONLINE' ? '#34d399' : '#94a3b8',
+                  fontSize: '0.7rem',
+                  padding: '2px 6px',
+                  borderRadius: '4px',
+                  fontWeight: 600
+                }}>
+                  {dev.status || 'STANDBY'}
+                </span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.75rem', color: '#94a3b8' }}>
                 <span>Type: {dev.deviceType}</span>
