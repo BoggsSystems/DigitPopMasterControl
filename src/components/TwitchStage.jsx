@@ -137,13 +137,7 @@ export default function TwitchStage({ activeSource, onSelectSource }) {
   const [isMuted, setIsMuted] = useState(false);
   const [isPairModalOpen, setIsPairModalOpen] = useState(false);
 
-  const defaultDevices = [
-    { deviceId: 'dev_macbook_01', deviceName: 'MacBook Pro Presenter Cam', deviceType: 'IOS_APP', status: 'STANDBY', resolution: '4K 60fps', role: 'PIP_FACE' },
-    { deviceId: 'dev_iphone_02', deviceName: 'iPhone 16 Pro Roaming Cam', deviceType: 'IOS_APP', status: 'STANDBY', resolution: '4K 60fps', role: 'ANGLE_3' },
-    { deviceId: 'dev_macmini_03', deviceName: 'Mac Mini Opportunity OS Screen', deviceType: 'DESKTOP_CAPTURE', status: 'STANDBY', resolution: '1080p 60fps', role: 'MAIN_SCREEN' }
-  ];
-
-  const [connectedDevices, setConnectedDevices] = useState(defaultDevices);
+  const [connectedDevices, setConnectedDevices] = useState([]);
 
   useEffect(() => {
     async function fetchSources() {
@@ -151,33 +145,22 @@ export default function TwitchStage({ activeSource, onSelectSource }) {
         const res = await fetch('https://digitpop-server-staging.up.railway.app/api/stream/sources');
         const data = await res.json();
         const serverDevices = (data.success && data.devices) || [];
-        const onlineDeviceIds = new Set(serverDevices.map(d => d.deviceId));
-        const hasMacBookServer = serverDevices.some(sd => sd.deviceName && sd.deviceName.toLowerCase().includes('macbook'));
 
         setConnectedDevices(prevDevices => {
-          // Merge custom attached devices with default devices
-          const combined = [...prevDevices];
-          serverDevices.forEach(sd => {
-            if (!combined.some(cd => cd.deviceId === sd.deviceId)) {
-              combined.push({
-                deviceId: sd.deviceId,
-                deviceName: sd.deviceName || 'Client Device',
-                deviceType: sd.deviceType || 'IOS_APP',
-                status: 'ONLINE',
-                resolution: sd.resolution || '4K 60fps',
-                role: 'PIP_FACE'
-              });
-            }
-          });
+          // If server reports connected clients, use server devices directly
+          if (serverDevices.length > 0) {
+            return serverDevices.map(sd => ({
+              deviceId: sd.deviceId,
+              deviceName: sd.deviceName || 'Client Device',
+              deviceType: sd.deviceType || 'IOS_APP',
+              status: 'ONLINE',
+              resolution: sd.resolution || '4K 60fps',
+              role: sd.role || 'PIP_FACE'
+            }));
+          }
 
-          return combined.map(d => {
-            const isMacBook = d.deviceId === 'dev_macbook_01';
-            const isOnline = onlineDeviceIds.has(d.deviceId) || (isMacBook && hasMacBookServer);
-            return {
-              ...d,
-              status: isOnline ? 'ONLINE' : d.status === 'ONLINE' && onlineDeviceIds.has(d.deviceId) ? 'ONLINE' : 'STANDBY'
-            };
-          });
+          // Retain manually attached active devices, filter out disconnected ones
+          return prevDevices.filter(d => d.isManuallyAttached);
         });
       } catch (err) {
         // Fallback
@@ -209,7 +192,8 @@ export default function TwitchStage({ activeSource, onSelectSource }) {
       deviceType: type,
       status: 'ONLINE',
       resolution: resText,
-      role: 'ANGLE_3'
+      role: 'ANGLE_3',
+      isManuallyAttached: true
     };
 
     setConnectedDevices(prev => [...prev, newDevice]);
@@ -348,65 +332,75 @@ export default function TwitchStage({ activeSource, onSelectSource }) {
           </button>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(290px, 1fr))', gap: '10px' }}>
-          {connectedDevices.map(dev => (
-            <div key={dev.deviceId} style={{ background: 'rgba(30, 41, 59, 0.6)', padding: '12px', borderRadius: '10px', border: dev.status === 'ONLINE' ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid var(--border-glass)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ fontWeight: 700, fontSize: '0.85rem', color: '#fff' }}>{dev.deviceName}</span>
-                  {dev.status === 'ONLINE' && <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 6px #10b981' }} />}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{
-                    background: dev.status === 'ONLINE' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(148, 163, 184, 0.15)',
-                    color: dev.status === 'ONLINE' ? '#34d399' : '#94a3b8',
-                    fontSize: '0.7rem',
-                    padding: '2px 6px',
-                    borderRadius: '4px',
-                    fontWeight: 600
-                  }}>
-                    {dev.status || 'STANDBY'}
-                  </span>
-
-                  <button
-                    onClick={() => handleDetachDevice(dev.deviceId)}
-                    title="Disconnect / Remove Device"
-                    style={{ background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#f87171', borderRadius: '4px', padding: '2px 6px', cursor: 'pointer', fontSize: '0.65rem' }}
-                  >
-                    🔌 Remove
-                  </button>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.75rem', color: '#94a3b8' }}>
-                <span>Type: {dev.deviceType}</span>
-                <span>{dev.resolution}</span>
-              </div>
-
-              <div style={{ display: 'flex', gap: '6px', marginTop: '2px' }}>
-                {['MAIN_SCREEN', 'PIP_FACE', 'ANGLE_3'].map(role => (
-                  <button
-                    key={role}
-                    onClick={() => assignDeviceRole(dev.deviceId, role)}
-                    style={{
-                      flex: 1,
-                      padding: '4px 6px',
-                      borderRadius: '6px',
+        {connectedDevices.length === 0 ? (
+          <div style={{ background: 'rgba(30, 41, 59, 0.4)', borderRadius: '10px', border: '1px dashed var(--border-glass)', padding: '24px 16px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '1.8rem' }}>📡</span>
+            <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#f8fafc' }}>NO CLIENT DEVICES CURRENTLY REGISTERED</span>
+            <span style={{ fontSize: '0.8rem', color: '#94a3b8', maxWidth: '460px', lineHeight: 1.5 }}>
+              Launch <strong style={{ color: '#38bdf8' }}>DigitPop Studio</strong> on your MacBook or iPhone to auto-register, or click <strong style={{ color: '#3b82f6' }}>"➕ Pair / Attach Device"</strong> above to attach a stream source manually.
+            </span>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(290px, 1fr))', gap: '10px' }}>
+            {connectedDevices.map(dev => (
+              <div key={dev.deviceId} style={{ background: 'rgba(30, 41, 59, 0.6)', padding: '12px', borderRadius: '10px', border: dev.status === 'ONLINE' ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid var(--border-glass)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ fontWeight: 700, fontSize: '0.85rem', color: '#fff' }}>{dev.deviceName}</span>
+                    {dev.status === 'ONLINE' && <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 6px #10b981' }} />}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{
+                      background: dev.status === 'ONLINE' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(148, 163, 184, 0.15)',
+                      color: dev.status === 'ONLINE' ? '#34d399' : '#94a3b8',
                       fontSize: '0.7rem',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      border: dev.role === role ? '1px solid #10b981' : '1px solid var(--border-glass)',
-                      background: dev.role === role ? 'rgba(16, 185, 129, 0.3)' : 'rgba(15, 23, 42, 0.6)',
-                      color: dev.role === role ? '#34d399' : '#94a3b8'
-                    }}
-                  >
-                    {role === 'MAIN_SCREEN' ? '🖥️ Main' : role === 'PIP_FACE' ? '📷 PiP' : '📹 Angle 3'}
-                  </button>
-                ))}
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      fontWeight: 600
+                    }}>
+                      {dev.status || 'STANDBY'}
+                    </span>
+
+                    <button
+                      onClick={() => handleDetachDevice(dev.deviceId)}
+                      title="Disconnect / Remove Device"
+                      style={{ background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#f87171', borderRadius: '4px', padding: '2px 6px', cursor: 'pointer', fontSize: '0.65rem' }}
+                    >
+                      🔌 Remove
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.75rem', color: '#94a3b8' }}>
+                  <span>Type: {dev.deviceType}</span>
+                  <span>{dev.resolution}</span>
+                </div>
+
+                <div style={{ display: 'flex', gap: '6px', marginTop: '2px' }}>
+                  {['MAIN_SCREEN', 'PIP_FACE', 'ANGLE_3'].map(role => (
+                    <button
+                      key={role}
+                      onClick={() => assignDeviceRole(dev.deviceId, role)}
+                      style={{
+                        flex: 1,
+                        padding: '4px 6px',
+                        borderRadius: '6px',
+                        fontSize: '0.7rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        border: dev.role === role ? '1px solid #10b981' : '1px solid var(--border-glass)',
+                        background: dev.role === role ? 'rgba(16, 185, 129, 0.3)' : 'rgba(15, 23, 42, 0.6)',
+                        color: dev.role === role ? '#34d399' : '#94a3b8'
+                      }}
+                    >
+                      {role === 'MAIN_SCREEN' ? '🖥️ Main' : role === 'PIP_FACE' ? '📷 PiP' : '📹 Angle 3'}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Main Broadcast Composition Canvas */}
