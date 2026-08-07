@@ -3,6 +3,8 @@ import React, { useState, useEffect, useRef } from 'react';
 function LiveCameraStream({ activeSource, isPip }) {
   const [remoteFrameUrl, setRemoteFrameUrl] = useState(null);
   const [streamStatus, setStreamStatus] = useState('Connecting to Railway Cloud Router...');
+  const [frameCount, setFrameCount] = useState(0);
+  const [lastFrameTime, setLastFrameTime] = useState(null);
 
   useEffect(() => {
     console.log('[LiveCameraStream] Subscribing to cloud stream feed for source:', activeSource);
@@ -12,16 +14,23 @@ function LiveCameraStream({ activeSource, isPip }) {
     try {
       ws = new WebSocket('wss://digitpop-server-staging.up.railway.app/master_control?sessionId=45f65b49-79ef-48c6-a2e3-9c9655a4f569');
       ws.onopen = () => {
-        console.log('[LiveCameraStream] WebSocket connected to Railway Cloud');
-        setStreamStatus('Receiving live video frames from client app...');
+        console.log('[LiveCameraStream] WebSocket connected to Railway Cloud router');
+        setStreamStatus('WebSockets Connected — Waiting for Broadcaster Frame Ingest...');
       };
       ws.onmessage = (evt) => {
         try {
           const msg = JSON.parse(evt.data);
           if (msg.type === 'REMOTE_VIDEO_FRAME' && typeof msg.frameData === 'string' && msg.frameData.startsWith('data:image/')) {
-            console.log('[LiveCameraStream] Rendering live JPEG frame from MacBook!');
             setRemoteFrameUrl(msg.frameData);
-            setStreamStatus('Live Presenter Stream Active');
+            setFrameCount(prev => {
+              const nextCount = prev + 1;
+              if (nextCount % 10 === 0) {
+                console.log(`📡 [CLIENT FRAME RECEIVER] Rendered Frame #${nextCount} from MacBook Broadcaster!`);
+              }
+              return nextCount;
+            });
+            setLastFrameTime(new Date().toLocaleTimeString());
+            setStreamStatus('Live Presenter Stream Active (60fps)');
           }
         } catch (e) {}
       };
@@ -40,6 +49,13 @@ function LiveCameraStream({ activeSource, isPip }) {
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative', background: '#020617', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }}>
+      {/* Telemetry Badge Overlay */}
+      <div style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 10, background: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(6px)', border: '1px solid rgba(168, 85, 247, 0.4)', borderRadius: '8px', padding: '4px 10px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.7rem', color: '#fff' }}>
+        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: frameCount > 0 ? '#10b981' : '#f59e0b', boxShadow: frameCount > 0 ? '0 0 8px #10b981' : '0 0 8px #f59e0b' }} />
+        <span>Frames: <strong>{frameCount}</strong></span>
+        {lastFrameTime && <span style={{ color: '#94a3b8' }}>| Last: {lastFrameTime}</span>}
+      </div>
+
       {/* 1. Live WebSockets Remote Video Stream Frame */}
       {remoteFrameUrl ? (
         <img
@@ -49,7 +65,7 @@ function LiveCameraStream({ activeSource, isPip }) {
           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
         />
       ) : (
-        /* 2. Cloud Stream Standby HUD (No local browser camera prompts) */
+        /* 2. Cloud Stream Standby HUD */
         <div style={{ width: '100%', height: '100%', background: 'radial-gradient(circle at 50% 50%, rgba(168, 85, 247, 0.35), rgba(2, 6, 23, 0.95))', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '12px', padding: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(16, 185, 129, 0.2)', border: '1px solid rgba(16, 185, 129, 0.5)', padding: '6px 16px', borderRadius: '20px' }}>
             <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 10px #10b981' }} />
