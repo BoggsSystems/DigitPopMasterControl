@@ -135,30 +135,37 @@ export default function TwitchStage({ activeSource, onSelectSource }) {
   const [pipPosition, setPipPosition] = useState('bottom-right');
   const [pipSize, setPipSize] = useState('medium');
   const [isMuted, setIsMuted] = useState(false);
-  const [connectedDevices, setConnectedDevices] = useState([
-    { deviceId: 'dev_macbook_01', deviceName: 'MacBook Pro Presenter Cam', deviceType: 'IOS_APP', status: 'ONLINE', resolution: '4K 60fps', role: 'PIP_FACE' },
+  const defaultDevices = [
+    { deviceId: 'dev_macbook_01', deviceName: 'MacBook Pro Presenter Cam', deviceType: 'IOS_APP', status: 'STANDBY', resolution: '4K 60fps', role: 'PIP_FACE' },
     { deviceId: 'dev_iphone_02', deviceName: 'iPhone 16 Pro Roaming Cam', deviceType: 'IOS_APP', status: 'STANDBY', resolution: '4K 60fps', role: 'ANGLE_3' },
     { deviceId: 'dev_macmini_03', deviceName: 'Mac Mini Opportunity OS Screen', deviceType: 'DESKTOP_CAPTURE', status: 'STANDBY', resolution: '1080p 60fps', role: 'MAIN_SCREEN' }
-  ]);
+  ];
+
+  const [connectedDevices, setConnectedDevices] = useState(defaultDevices);
 
   useEffect(() => {
     async function fetchSources() {
       try {
         const res = await fetch('https://digitpop-server-staging.up.railway.app/api/stream/sources');
         const data = await res.json();
-        if (data.success && data.devices && data.devices.length > 0) {
-          const onlineIds = new Set(data.devices.map(d => d.deviceId));
-          setConnectedDevices(prev => prev.map(d => ({
+        const serverDevices = (data.success && data.devices) || [];
+        const onlineDeviceIds = new Set(serverDevices.map(d => d.deviceId));
+        const hasMacBookServer = serverDevices.some(sd => sd.deviceName && sd.deviceName.toLowerCase().includes('macbook'));
+
+        setConnectedDevices(defaultDevices.map(d => {
+          const isMacBook = d.deviceId === 'dev_macbook_01';
+          const isOnline = onlineDeviceIds.has(d.deviceId) || (isMacBook && hasMacBookServer);
+          return {
             ...d,
-            status: onlineIds.has(d.deviceId) || d.deviceName.includes('MacBook') ? 'ONLINE' : 'STANDBY'
-          })));
-        }
+            status: isOnline ? 'ONLINE' : 'STANDBY'
+          };
+        }));
       } catch (err) {
         // Fallback
       }
     }
     fetchSources();
-    const interval = setInterval(fetchSources, 5000);
+    const interval = setInterval(fetchSources, 3000);
     return () => clearInterval(interval);
   }, []);
 
