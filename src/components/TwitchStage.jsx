@@ -1,95 +1,59 @@
 import React, { useState, useEffect, useRef } from 'react';
 
 function LiveCameraStream({ activeSource, isPip }) {
-  const localVideoRef = useRef(null);
   const [remoteFrameUrl, setRemoteFrameUrl] = useState(null);
-  const [hasCameraAccess, setHasCameraAccess] = useState(false);
-  const [logStatus, setLogStatus] = useState('Initializing stream engine...');
+  const [streamStatus, setStreamStatus] = useState('Connecting to Railway Cloud Router...');
 
   useEffect(() => {
-    console.log('[LiveCameraStream] Initializing camera & stream engine for source:', activeSource);
-    setLogStatus(`Initializing camera stream for ${activeSource}...`);
-
-    let stream = null;
-    navigator.mediaDevices?.getUserMedia({ video: { width: 1280, height: 720 }, audio: false })
-      .then(st => {
-        console.log('[LiveCameraStream] Camera stream acquired successfully!');
-        stream = st;
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = st;
-          localVideoRef.current.play().catch(e => console.warn('Video play notice:', e));
-        }
-        setHasCameraAccess(true);
-        setLogStatus('Live presenter camera active');
-      })
-      .catch(err => {
-        console.warn('[LiveCameraStream] getUserMedia notice:', err.message);
-        setHasCameraAccess(false);
-        setLogStatus(`Camera notice: ${err.message}`);
-      });
+    console.log('[LiveCameraStream] Subscribing to cloud stream feed for source:', activeSource);
+    setStreamStatus(`Connected to Railway Cloud Ingest for ${activeSource}`);
 
     let ws = null;
     try {
       ws = new WebSocket('wss://digitpop-server-staging.up.railway.app/master_control?sessionId=45f65b49-79ef-48c6-a2e3-9c9655a4f569');
-      ws.onopen = () => console.log('[LiveCameraStream] WebSocket connected to Railway Cloud');
+      ws.onopen = () => {
+        console.log('[LiveCameraStream] WebSocket connected to Railway Cloud');
+        setStreamStatus('Receiving live video frames from client app...');
+      };
       ws.onmessage = (evt) => {
         try {
           const msg = JSON.parse(evt.data);
-          if (msg.type === 'REMOTE_VIDEO_FRAME' && typeof msg.frameData === 'string' && msg.frameData.length > 50 && msg.frameData.startsWith('data:image/')) {
-            console.log('[LiveCameraStream] Received valid REMOTE_VIDEO_FRAME from cloud!');
+          if (msg.type === 'REMOTE_VIDEO_FRAME' && typeof msg.frameData === 'string' && msg.frameData.startsWith('data:image/')) {
+            console.log('[LiveCameraStream] Rendering live JPEG frame from MacBook!');
             setRemoteFrameUrl(msg.frameData);
+            setStreamStatus('Live Presenter Stream Active');
           }
         } catch (e) {}
       };
+      ws.onerror = (err) => {
+        console.warn('[LiveCameraStream] WebSocket notice:', err);
+        setStreamStatus('Cloud connection notice (Reconnecting...)');
+      };
     } catch (e) {
-      console.warn('[LiveCameraStream] WebSocket error:', e);
+      console.warn('[LiveCameraStream] WebSocket connection notice:', e);
     }
 
     return () => {
-      if (stream) stream.getTracks().forEach(t => t.stop());
       if (ws) ws.close();
     };
   }, [activeSource]);
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative', background: '#020617', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }}>
-      {/* Remote WebSocket Frame Overlay (Only rendered when valid base64 data exists) */}
-      {remoteFrameUrl && (
+      {/* 1. Live WebSockets Remote Video Stream Frame */}
+      {remoteFrameUrl ? (
         <img
           src={remoteFrameUrl}
-          alt="Live Remote Feed"
-          onError={() => {
-            console.warn('[LiveCameraStream] Invalid image frame, falling back');
-            setRemoteFrameUrl(null);
-          }}
-          style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', inset: 0, zIndex: 3 }}
+          alt="Live Remote Stream Feed"
+          onError={() => setRemoteFrameUrl(null)}
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
         />
-      )}
-
-      {/* Local Video Camera Track */}
-      <video
-        ref={localVideoRef}
-        autoPlay
-        playsInline
-        muted
-        style={{
-          width: '100%',
-          height: '100%',
-          objectFit: 'cover',
-          transform: isPip ? 'none' : 'scaleX(-1)',
-          position: 'absolute',
-          inset: 0,
-          zIndex: 2,
-          display: hasCameraAccess ? 'block' : 'none'
-        }}
-      />
-
-      {/* High-Tech Animated Fallback Canvas with Telemetry HUD */}
-      {!hasCameraAccess && !remoteFrameUrl && (
-        <div style={{ position: 'absolute', inset: 0, zIndex: 1, background: 'radial-gradient(circle at 50% 50%, rgba(168, 85, 247, 0.35), rgba(2, 6, 23, 0.95))', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '12px', padding: '16px' }}>
+      ) : (
+        /* 2. Cloud Stream Standby HUD (No local browser camera prompts) */
+        <div style={{ width: '100%', height: '100%', background: 'radial-gradient(circle at 50% 50%, rgba(168, 85, 247, 0.35), rgba(2, 6, 23, 0.95))', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '12px', padding: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(16, 185, 129, 0.2)', border: '1px solid rgba(16, 185, 129, 0.5)', padding: '6px 16px', borderRadius: '20px' }}>
             <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 10px #10b981' }} />
-            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#34d399', letterSpacing: '0.5px' }}>● LIVE CLOUD INGEST ACTIVE</span>
+            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#34d399', letterSpacing: '0.5px' }}>● RAILWAY CLOUD INGEST ACTIVE</span>
           </div>
 
           <span style={{ fontSize: isPip ? '1.8rem' : '3.5rem' }}>📹</span>
@@ -98,26 +62,14 @@ function LiveCameraStream({ activeSource, isPip }) {
             {activeSource === 'IPHONE_ROAMING' ? 'iPhone 16 Pro Roaming Cam (4K 60fps)' : 'MacBook Pro Presenter Cam (1080p 60fps)'}
           </span>
 
-          <div style={{ background: 'rgba(15, 23, 42, 0.85)', padding: '8px 16px', borderRadius: '8px', border: '1px solid var(--border-glass)', fontSize: '0.75rem', color: '#c084fc', textAlign: 'center', maxWidth: '380px' }}>
-            Status: {logStatus}
+          <div style={{ background: 'rgba(15, 23, 42, 0.85)', padding: '8px 16px', borderRadius: '8px', border: '1px solid var(--border-glass)', fontSize: '0.75rem', color: '#c084fc', textAlign: 'center', maxWidth: '420px' }}>
+            Status: {streamStatus}
           </div>
 
           {!isPip && (
-            <button
-              onClick={() => {
-                navigator.mediaDevices?.getUserMedia({ video: true })
-                  .then(st => {
-                    if (localVideoRef.current) {
-                      localVideoRef.current.srcObject = st;
-                      localVideoRef.current.play().catch(e => console.warn(e));
-                    }
-                    setHasCameraAccess(true);
-                  });
-              }}
-              style={{ background: 'linear-gradient(135deg, #a855f7, #7e22ce)', border: 'none', color: '#fff', padding: '8px 18px', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem', boxShadow: '0 4px 14px rgba(168, 85, 247, 0.4)' }}
-            >
-              ▶ Enable Video Preview Feed
-            </button>
+            <p style={{ fontSize: '0.75rem', color: '#94a3b8', textAlign: 'center', maxWidth: '400px', margin: 0 }}>
+              Launch <strong style={{ color: '#38bdf8' }}>DigitPop Studio</strong> on your MacBook and tap <strong style={{ color: '#10b981' }}>Start Stream</strong> to push live video frames to Railway Cloud!
+            </p>
           )}
         </div>
       )}
