@@ -9,7 +9,7 @@ function LiveCameraStream({ activeSource, isPip }) {
     let stream = null;
     async function startCamera() {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 }, audio: false });
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
         }
@@ -44,9 +44,9 @@ function LiveCameraStream({ activeSource, isPip }) {
       />
       {!hasPermission && (
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, #1e1b4b, #311b92)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '12px' }}>
-          <span style={{ fontSize: isPip ? '1.5rem' : '3rem' }}>🎥</span>
-          <span style={{ fontSize: isPip ? '0.7rem' : '1.1rem', fontWeight: 700, color: '#fff', textAlign: 'center' }}>
-            {activeSource === 'IPHONE_ROAMING' ? 'iPhone Roaming Camera (4K 60fps)' : 'MacBook Presenter Camera (1080p)'}
+          <span style={{ fontSize: isPip ? '1.5rem' : '2.5rem' }}>🎥</span>
+          <span style={{ fontSize: isPip ? '0.7rem' : '1rem', fontWeight: 700, color: '#fff', textAlign: 'center' }}>
+            {activeSource === 'IPHONE_ROAMING' ? 'iPhone Roaming Camera Feed' : 'MacBook Presenter Camera Feed'}
           </span>
           <button
             onClick={() => {
@@ -57,9 +57,9 @@ function LiveCameraStream({ activeSource, isPip }) {
                 })
                 .catch(e => setErrorMsg(e.message));
             }}
-            style={{ background: '#a855f7', border: 'none', color: '#fff', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '0.75rem' }}
+            style={{ background: 'linear-gradient(135deg, #a855f7, #7e22ce)', border: 'none', color: '#fff', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '0.75rem', boxShadow: '0 2px 8px rgba(168, 85, 247, 0.4)' }}
           >
-            Enable Camera Feed
+            ▶ Click to Start Video Preview
           </button>
         </div>
       )}
@@ -136,7 +136,6 @@ export default function TwitchStage({ activeSource, onSelectSource }) {
   const [pipSize, setPipSize] = useState('medium');
   const [isMuted, setIsMuted] = useState(false);
   const [isPairModalOpen, setIsPairModalOpen] = useState(false);
-
   const [connectedDevices, setConnectedDevices] = useState([]);
 
   useEffect(() => {
@@ -147,7 +146,6 @@ export default function TwitchStage({ activeSource, onSelectSource }) {
         const serverDevices = (data.success && data.devices) || [];
 
         setConnectedDevices(prevDevices => {
-          // If server reports connected clients, use server devices directly
           if (serverDevices.length > 0) {
             return serverDevices.map(sd => ({
               deviceId: sd.deviceId,
@@ -158,8 +156,6 @@ export default function TwitchStage({ activeSource, onSelectSource }) {
               role: sd.role || 'PIP_FACE'
             }));
           }
-
-          // Retain manually attached active devices, filter out disconnected ones
           return prevDevices.filter(d => d.isManuallyAttached);
         });
       } catch (err) {
@@ -341,13 +337,13 @@ export default function TwitchStage({ activeSource, onSelectSource }) {
             </span>
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(290px, 1fr))', gap: '10px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '12px' }}>
             {connectedDevices.map(dev => (
-              <div key={dev.deviceId} style={{ background: 'rgba(30, 41, 59, 0.6)', padding: '12px', borderRadius: '10px', border: dev.status === 'ONLINE' ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid var(--border-glass)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div key={dev.deviceId} style={{ background: 'rgba(30, 41, 59, 0.7)', padding: '12px', borderRadius: '12px', border: dev.status === 'ONLINE' ? '1px solid rgba(16, 185, 129, 0.5)' : '1px solid var(--border-glass)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <span style={{ fontWeight: 700, fontSize: '0.85rem', color: '#fff' }}>{dev.deviceName}</span>
-                    {dev.status === 'ONLINE' && <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 6px #10b981' }} />}
+                    {dev.status === 'ONLINE' && <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 8px #10b981' }} />}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <span style={{
@@ -371,6 +367,17 @@ export default function TwitchStage({ activeSource, onSelectSource }) {
                   </div>
                 </div>
 
+                {/* Mini Live Stream Video Preview Thumbnail */}
+                <div
+                  onClick={() => onSelectSource('MACBOOK_FACETIME')}
+                  style={{ width: '100%', height: '85px', borderRadius: '8px', overflow: 'hidden', background: '#020617', border: '1px solid rgba(168, 85, 247, 0.3)', cursor: 'pointer', position: 'relative' }}
+                >
+                  <LiveCameraStream activeSource="MINI_PREVIEW" isPip />
+                  <div style={{ position: 'absolute', bottom: '4px', left: '6px', background: 'rgba(0,0,0,0.7)', padding: '2px 6px', borderRadius: '4px', fontSize: '0.65rem', color: '#a855f7', fontWeight: 700 }}>
+                    ▶ LIVE PREVIEW (1080p)
+                  </div>
+                </div>
+
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.75rem', color: '#94a3b8' }}>
                   <span>Type: {dev.deviceType}</span>
                   <span>{dev.resolution}</span>
@@ -380,7 +387,10 @@ export default function TwitchStage({ activeSource, onSelectSource }) {
                   {['MAIN_SCREEN', 'PIP_FACE', 'ANGLE_3'].map(role => (
                     <button
                       key={role}
-                      onClick={() => assignDeviceRole(dev.deviceId, role)}
+                      onClick={() => {
+                        assignDeviceRole(dev.deviceId, role);
+                        if (role === 'PIP_FACE') onSelectSource('MACBOOK_FACETIME');
+                      }}
                       style={{
                         flex: 1,
                         padding: '4px 6px',
