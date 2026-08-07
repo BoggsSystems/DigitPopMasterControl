@@ -35,8 +35,8 @@ function LiveCameraStream({ activeSource, isPip }) {
       ws.onmessage = (evt) => {
         try {
           const msg = JSON.parse(evt.data);
-          if (msg.type === 'REMOTE_VIDEO_FRAME' && msg.frameData) {
-            console.log('[LiveCameraStream] Received REMOTE_VIDEO_FRAME from cloud!');
+          if (msg.type === 'REMOTE_VIDEO_FRAME' && typeof msg.frameData === 'string' && msg.frameData.length > 50 && msg.frameData.startsWith('data:image/')) {
+            console.log('[LiveCameraStream] Received valid REMOTE_VIDEO_FRAME from cloud!');
             setRemoteFrameUrl(msg.frameData);
           }
         } catch (e) {}
@@ -53,11 +53,15 @@ function LiveCameraStream({ activeSource, isPip }) {
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative', background: '#020617', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }}>
-      {/* Remote WebSocket Frame Overlay */}
+      {/* Remote WebSocket Frame Overlay (Only rendered when valid base64 data exists) */}
       {remoteFrameUrl && (
         <img
           src={remoteFrameUrl}
           alt="Live Remote Feed"
+          onError={() => {
+            console.warn('[LiveCameraStream] Invalid image frame, falling back');
+            setRemoteFrameUrl(null);
+          }}
           style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', inset: 0, zIndex: 3 }}
         />
       )}
@@ -478,7 +482,7 @@ export default function TwitchStage({ activeSource, onSelectSource }) {
           ) : (
             <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg, #064e3b, #047857)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
               <div style={{ fontSize: '3rem' }}>📱</div>
-              <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#fff' }}>iPhone Wireless Roaming Camera</h3>
+              <h3 style={{ fontSize: '1.2rem', fontWeight 700, color: '#fff' }}>iPhone Wireless Roaming Camera</h3>
               <p style={{ color: '#6ee7b7', fontSize: '0.85rem' }}>Secondary Mobile Close-Up Angle (4K 60fps)</p>
             </div>
           )}
