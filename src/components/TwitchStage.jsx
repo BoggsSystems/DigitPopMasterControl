@@ -66,7 +66,7 @@ export default function TwitchStage({ activeSource, onSelectSource }) {
   useEffect(() => {
     async function fetchSources() {
       try {
-        const res = await fetch('https://digitpop-server-staging.up.railway.app/api/stream/session/a95eae04-e911-4ab3-8a78-c1d876b4ac58/sources');
+        const res = await fetch('https://digitpop-server-staging.up.railway.app/api/stream/sources');
         const data = await res.json();
         if (data.success && data.devices && data.devices.length > 0) {
           setConnectedDevices(data.devices);
