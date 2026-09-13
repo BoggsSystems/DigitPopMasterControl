@@ -1,9 +1,29 @@
 import React, { useState } from 'react';
 
-export default function ShoppableTriggerDeck({ onTriggerOverlay, isAiAutopilot, onToggleAiAutopilot }) {
-  const [activeTriggeringId, setActiveTriggeringId] = useState(null);
+export interface ProductGroup {
+  id: string;
+  title: string;
+  subtitle: string;
+  description: string;
+  price: string;
+  icon: string;
+  badge?: string;
+}
 
-  const productGroups = [
+export interface ShoppableTriggerDeckProps {
+  onTriggerOverlay: (group: ProductGroup) => Promise<void> | void;
+  isAiAutopilot: boolean;
+  onToggleAiAutopilot: () => void;
+}
+
+export default function ShoppableTriggerDeck({
+  onTriggerOverlay,
+  isAiAutopilot,
+  onToggleAiAutopilot
+}: ShoppableTriggerDeckProps) {
+  const [activeTriggeringId, setActiveTriggeringId] = useState<string | null>(null);
+
+  const productGroups: ProductGroup[] = [
     {
       id: 'efc15c77-d4b0-43a6-af53-e9e4ee036d56',
       title: 'Opportunity OS Pro Pass',
@@ -33,7 +53,7 @@ export default function ShoppableTriggerDeck({ onTriggerOverlay, isAiAutopilot, 
     }
   ];
 
-  const handleTrigger = async (group) => {
+  const handleTrigger = async (group: ProductGroup) => {
     setActiveTriggeringId(group.id);
     await onTriggerOverlay(group);
     setTimeout(() => setActiveTriggeringId(null), 1000);
@@ -96,7 +116,7 @@ export default function ShoppableTriggerDeck({ onTriggerOverlay, isAiAutopilot, 
                 padding: '16px',
                 display: 'flex',
                 flexDirection: 'column',
-                justify: 'space-between',
+                justifyContent: 'space-between',
                 gap: '12px',
                 transition: 'all 0.2s ease',
                 position: 'relative',

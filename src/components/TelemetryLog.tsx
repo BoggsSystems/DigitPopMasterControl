@@ -1,14 +1,28 @@
 import React, { useState } from 'react';
 
-export default function TelemetryLog({ events, onClearLogs }) {
-  const [filterType, setFilterType] = useState('ALL');
+export interface TelemetryEvent {
+  time?: string;
+  type: string;
+  message?: string;
+  source?: string;
+  latencyMs?: number;
+  [key: string]: any;
+}
+
+export interface TelemetryLogProps {
+  events: TelemetryEvent[];
+  onClearLogs: () => void;
+}
+
+export default function TelemetryLog({ events, onClearLogs }: TelemetryLogProps) {
+  const [filterType, setFilterType] = useState<string>('ALL');
 
   const filteredEvents = events.filter((evt) => {
     if (filterType === 'ALL') return true;
     return evt.type === filterType;
   });
 
-  const getEventBadgeStyle = (type) => {
+  const getEventBadgeStyle = (type: string) => {
     switch (type) {
       case 'LIVE_OVERLAY_TRIGGER':
         return { bg: 'rgba(16, 185, 129, 0.15)', color: '#34d399', border: '1px solid rgba(16, 185, 129, 0.3)' };

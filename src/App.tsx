@@ -1,22 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
 import TwitchStage from './components/TwitchStage';
-import ShoppableTriggerDeck from './components/ShoppableTriggerDeck';
-import TelemetryLog from './components/TelemetryLog';
-import { ENVIRONMENTS } from './config/environment';
+import ShoppableTriggerDeck, { ProductGroup } from './components/ShoppableTriggerDeck';
+import TelemetryLog, { TelemetryEvent } from './components/TelemetryLog';
+import { ENVIRONMENTS, EnvironmentKey } from './config/environment';
 
 export default function App() {
-  const [isStreaming, setIsStreaming] = useState(true);
-  const [isConnected, setIsConnected] = useState(true);
-  const [currentEnv, setCurrentEnv] = useState('staging');
-  const [serverUrl, setServerUrl] = useState(ENVIRONMENTS.staging.apiUrl);
-  const [durationSeconds, setDurationSeconds] = useState(142);
-  const [viewerCount, setViewerCount] = useState(1420);
-  const [credits, setCredits] = useState(14200);
-  const [activeSource, setActiveSource] = useState('MAC_MINI_DESKTOP');
-  const [isAiAutopilot, setIsAiAutopilot] = useState(true);
+  const [isStreaming, setIsStreaming] = useState<boolean>(true);
+  const [isConnected, setIsConnected] = useState<boolean>(true);
+  const [currentEnv, setCurrentEnv] = useState<EnvironmentKey>('staging');
+  const [serverUrl, setServerUrl] = useState<string>(ENVIRONMENTS.staging.apiUrl);
+  const [durationSeconds, setDurationSeconds] = useState<number>(142);
+  const [viewerCount, setViewerCount] = useState<number>(1420);
+  const [credits, setCredits] = useState<number>(14200);
+  const [activeSource, setActiveSource] = useState<string>('MAC_MINI_DESKTOP');
+  const [isAiAutopilot, setIsAiAutopilot] = useState<boolean>(true);
 
-  const [events, setEvents] = useState([
+  const [events, setEvents] = useState<TelemetryEvent[]>([
     {
       time: new Date().toLocaleTimeString(),
       type: 'LIVE_OVERLAY_TRIGGER',
@@ -42,23 +42,25 @@ export default function App() {
 
   // Duration timer
   useEffect(() => {
-    let timer = null;
+    let timer: any = null;
     if (isStreaming) {
       timer = setInterval(() => {
         setDurationSeconds((prev) => prev + 1);
       }, 1000);
     }
-    return () => clearInterval(timer);
+    return () => {
+      if (timer) clearInterval(timer);
+    };
   }, [isStreaming]);
 
   // Connect to Railway Cloud WebSockets for live telemetry and viewer events
   useEffect(() => {
-    let ws = null;
-    const wsUrl = ENVIRONMENTS[currentEnv].wsUrl || 'wss://digitpop-server-staging.up.railway.app';
+    let ws: WebSocket | null = null;
+    const wsUrl = ENVIRONMENTS[currentEnv]?.wsUrl || 'wss://digitpop-server-staging.up.railway.app';
     try {
       ws = new WebSocket(`${wsUrl}/master_control?sessionId=45f65b49-79ef-48c6-a2e3-9c9655a4f569`);
       ws.onopen = () => setIsConnected(true);
-      ws.onmessage = (evt) => {
+      ws.onmessage = (evt: MessageEvent) => {
         try {
           const msg = JSON.parse(evt.data);
           if (msg.type === 'LIVE_OVERLAY_TRIGGER') {
@@ -71,7 +73,7 @@ export default function App() {
             }, ...prev]);
             setCredits(prev => prev + 150);
           } else if (msg.type === 'CONNECTED_DEVICES_MATRIX_UPDATE') {
-            setViewerCount(prev => Math.max(1420, msg.devices ? msg.devices.length * 473 : 1420));
+            setViewerCount(() => Math.max(1420, msg.devices ? msg.devices.length * 473 : 1420));
           }
         } catch (e) {
           // JSON parse skip
@@ -88,13 +90,13 @@ export default function App() {
   }, [currentEnv]);
 
   // Handle 1-Tap Overlay Trigger Dispatch
-  const handleTriggerOverlay = async (group) => {
+  const handleTriggerOverlay = async (group: ProductGroup) => {
     const startTime = performance.now();
     const sessionId = '45f65b49-79ef-48c6-a2e3-9c9655a4f569';
     const endpoint = `${serverUrl}/api/stream/session/${sessionId}/trigger`;
 
     try {
-      const res = await fetch(endpoint, {
+      await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -106,7 +108,7 @@ export default function App() {
       const endTime = performance.now();
       const latencyMs = Math.round(endTime - startTime);
 
-      const newLog = {
+      const newLog: TelemetryEvent = {
         time: new Date().toLocaleTimeString(),
         type: 'LIVE_OVERLAY_TRIGGER',
         message: `Dispatched ${group.title} (${group.price})`,
@@ -118,7 +120,7 @@ export default function App() {
       setCredits((prev) => prev + 150);
     } catch (err) {
       console.warn('Local trigger warning (using fallback simulation):', err);
-      const newLog = {
+      const newLog: TelemetryEvent = {
         time: new Date().toLocaleTimeString(),
         type: 'LIVE_OVERLAY_TRIGGER',
         message: `Dispatched ${group.title} (${group.price})`,
@@ -130,9 +132,9 @@ export default function App() {
     }
   };
 
-  const handleSourceChange = (newSource) => {
+  const handleSourceChange = (newSource: string) => {
     setActiveSource(newSource);
-    const newLog = {
+    const newLog: TelemetryEvent = {
       time: new Date().toLocaleTimeString(),
       type: 'SOURCE_SWITCH',
       message: `Active Broadcast Source changed to: ${newSource}`,
@@ -142,11 +144,12 @@ export default function App() {
     setEvents((prev) => [newLog, ...prev]);
   };
 
-  const handleEnvChange = (envKey) => {
-    const targetEnv = ENVIRONMENTS[envKey] || ENVIRONMENTS.staging;
-    setCurrentEnv(envKey);
+  const handleEnvChange = (envKey: string) => {
+    const key = envKey as EnvironmentKey;
+    const targetEnv = ENVIRONMENTS[key] || ENVIRONMENTS.staging;
+    setCurrentEnv(key);
     setServerUrl(targetEnv.apiUrl);
-    const newLog = {
+    const newLog: TelemetryEvent = {
       time: new Date().toLocaleTimeString(),
       type: 'ENVIRONMENT_SWITCH',
       message: `Switched environment to: ${targetEnv.label} (${targetEnv.apiUrl})`,

@@ -1,23 +1,38 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-function LiveCameraStream({ activeSource, isPip }) {
-  const [remoteFrameUrl, setRemoteFrameUrl] = useState(null);
-  const [streamStatus, setStreamStatus] = useState('Connecting to Railway Cloud Router...');
-  const [frameCount, setFrameCount] = useState(0);
-  const [lastFrameTime, setLastFrameTime] = useState(null);
+export interface ConnectedDevice {
+  deviceId: string;
+  deviceName: string;
+  deviceType: string;
+  status: string;
+  resolution: string;
+  role: string;
+  isManuallyAttached?: boolean;
+}
+
+export interface LiveCameraStreamProps {
+  activeSource: string;
+  isPip?: boolean;
+}
+
+function LiveCameraStream({ activeSource, isPip }: LiveCameraStreamProps) {
+  const [remoteFrameUrl, setRemoteFrameUrl] = useState<string | null>(null);
+  const [streamStatus, setStreamStatus] = useState<string>('Connecting to Railway Cloud Router...');
+  const [frameCount, setFrameCount] = useState<number>(0);
+  const [lastFrameTime, setLastFrameTime] = useState<string | null>(null);
 
   useEffect(() => {
     console.log('[LiveCameraStream] Subscribing to cloud stream feed for source:', activeSource);
     setStreamStatus(`Connected to Railway Cloud Ingest for ${activeSource}`);
 
-    let ws = null;
+    let ws: WebSocket | null = null;
     try {
       ws = new WebSocket('wss://digitpop-server-staging.up.railway.app/master_control?sessionId=45f65b49-79ef-48c6-a2e3-9c9655a4f569');
       ws.onopen = () => {
         console.log('[LiveCameraStream] WebSocket connected to Railway Cloud router');
         setStreamStatus('WebSockets Connected — Waiting for Broadcaster Frame Ingest...');
       };
-      ws.onmessage = (evt) => {
+      ws.onmessage = (evt: MessageEvent) => {
         try {
           const msg = JSON.parse(evt.data);
           if (msg.type === 'REMOTE_VIDEO_FRAME' && typeof msg.frameData === 'string' && msg.frameData.startsWith('data:image/')) {
@@ -94,20 +109,23 @@ function LiveCameraStream({ activeSource, isPip }) {
 }
 
 function LiveScreenCaptureStream() {
-  const videoRef = useRef(null);
-  const [isCapturing, setIsCapturing] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [isCapturing, setIsCapturing] = useState<boolean>(false);
 
   const startScreenCapture = async () => {
     try {
-      const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: { displaySurface: 'monitor' }, audio: false });
+      const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: { displaySurface: 'monitor' } as MediaTrackConstraints, audio: false });
       if (videoRef.current) {
         videoRef.current.srcObject = displayStream;
       }
       setIsCapturing(true);
 
-      displayStream.getVideoTracks()[0].onended = () => {
-        setIsCapturing(false);
-      };
+      const track = displayStream.getVideoTracks()[0];
+      if (track) {
+        track.onended = () => {
+          setIsCapturing(false);
+        };
+      }
     } catch (err) {
       console.warn('Screen capture cancelled:', err);
       setIsCapturing(false);
@@ -157,19 +175,24 @@ function LiveScreenCaptureStream() {
   );
 }
 
-export default function TwitchStage({ activeSource, onSelectSource }) {
-  const [pipPosition, setPipPosition] = useState('bottom-right');
-  const [pipSize, setPipSize] = useState('medium');
-  const [isMuted, setIsMuted] = useState(false);
-  const [isPairModalOpen, setIsPairModalOpen] = useState(false);
-  const [connectedDevices, setConnectedDevices] = useState([]);
+export interface TwitchStageProps {
+  activeSource: string;
+  onSelectSource: (source: string) => void;
+}
+
+export default function TwitchStage({ activeSource, onSelectSource }: TwitchStageProps) {
+  const [pipPosition, setPipPosition] = useState<string>('bottom-right');
+  const [pipSize, setPipSize] = useState<string>('medium');
+  const [isMuted, setIsMuted] = useState<boolean>(false);
+  const [isPairModalOpen, setIsPairModalOpen] = useState<boolean>(false);
+  const [connectedDevices, setConnectedDevices] = useState<ConnectedDevice[]>([]);
 
   useEffect(() => {
     async function fetchSources() {
       try {
         const res = await fetch('https://digitpop-server-staging.up.railway.app/api/stream/sources');
         const data = await res.json();
-        const serverDevices = (data.success && data.devices) || [];
+        const serverDevices: any[] = (data.success && data.devices) || [];
 
         setConnectedDevices(prevDevices => {
           if (serverDevices.length > 0) {
@@ -193,7 +216,7 @@ export default function TwitchStage({ activeSource, onSelectSource }) {
     return () => clearInterval(interval);
   }, []);
 
-  const assignDeviceRole = async (deviceId, newRole) => {
+  const assignDeviceRole = async (deviceId: string, newRole: string) => {
     setConnectedDevices(prev => prev.map(d => d.deviceId === deviceId ? { ...d, role: newRole } : d));
     try {
       await fetch('https://digitpop-server-staging.up.railway.app/api/stream/session/45f65b49-79ef-48c6-a2e3-9c9655a4f569/route-source', {
@@ -206,9 +229,9 @@ export default function TwitchStage({ activeSource, onSelectSource }) {
     }
   };
 
-  const handleAttachDevicePreset = async (name, type, resText) => {
+  const handleAttachDevicePreset = async (name: string, type: string, resText: string) => {
     const newId = `dev_${Date.now().toString().slice(-6)}`;
-    const newDevice = {
+    const newDevice: ConnectedDevice = {
       deviceId: newId,
       deviceName: name,
       deviceType: type,
@@ -232,7 +255,7 @@ export default function TwitchStage({ activeSource, onSelectSource }) {
     }
   };
 
-  const handleDetachDevice = async (deviceId) => {
+  const handleDetachDevice = async (deviceId: string) => {
     setConnectedDevices(prev => prev.filter(d => d.deviceId !== deviceId));
 
     try {
@@ -246,13 +269,13 @@ export default function TwitchStage({ activeSource, onSelectSource }) {
     }
   };
 
-  const getPipStyles = () => {
+  const getPipStyles = (): React.CSSProperties => {
     let sizeStyles = { width: '260px', height: '160px' };
     if (pipSize === 'small') sizeStyles = { width: '180px', height: '110px' };
     if (pipSize === 'large') sizeStyles = { width: '360px', height: '225px' };
     if (pipSize === 'hidden') return { display: 'none' };
 
-    let posStyles = { bottom: '20px', right: '20px' };
+    let posStyles: React.CSSProperties = { bottom: '20px', right: '20px' };
     if (pipPosition === 'top-left') posStyles = { top: '20px', left: '20px' };
     if (pipPosition === 'top-right') posStyles = { top: '20px', right: '20px' };
     if (pipPosition === 'bottom-left') posStyles = { bottom: '20px', left: '20px' };

@@ -1,4 +1,13 @@
-export const ENVIRONMENTS = {
+export interface EnvironmentConfig {
+  id: string;
+  label: string;
+  apiUrl: string;
+  wsUrl: string;
+}
+
+export type EnvironmentKey = 'development' | 'staging' | 'production';
+
+export const ENVIRONMENTS: Record<EnvironmentKey, EnvironmentConfig> = {
   development: {
     id: 'development',
     label: '🛠️ Local Dev (10.0.0.23:9000)',

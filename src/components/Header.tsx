@@ -1,7 +1,29 @@
 import React from 'react';
 
-export default function Header({ isStreaming, isConnected, serverUrl, currentEnv, onEnvChange, viewerCount, credits, durationSeconds, onToggleStream }) {
-  const formatTime = (secs) => {
+export interface HeaderProps {
+  isStreaming: boolean;
+  isConnected: boolean;
+  serverUrl: string;
+  currentEnv: string;
+  onEnvChange: (env: string) => void;
+  viewerCount: number;
+  credits: number;
+  durationSeconds: number;
+  onToggleStream: () => void;
+}
+
+export default function Header({
+  isStreaming,
+  isConnected,
+  serverUrl,
+  currentEnv,
+  onEnvChange,
+  viewerCount,
+  credits,
+  durationSeconds,
+  onToggleStream
+}: HeaderProps) {
+  const formatTime = (secs: number): string => {
     const m = Math.floor(secs / 60).toString().padStart(2, '0');
     const s = (secs % 60).toString().padStart(2, '0');
     return `${m}:${s}`;
